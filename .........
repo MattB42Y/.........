@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>CIPHER</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap');
+
+  :root {
+    --bg: #040608;
+    --surface: #080c10;
+    --panel: #0a1018;
+    --border: #1a3040;
+    --glow: #00ffe0;
+    --glow2: #0088ff;
+    --text: #c8f0e8;
+    --dim: #2a4a44;
+    --danger: #ff3366;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Share Tech Mono', monospace;
+    min-height: 100vh;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: fixed;
+    width: 100%;
+    height: 100%;
+  }
+
+  /* Scanline overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,255,224,0.015) 2px,
+      rgba(0,255,224,0.015) 4px
+    );
+    pointer-events: none;
+    z-index: 100;
+  }
+
+  header {
+    padding: 12px 20px 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .logo {
+    font-family: 'Orbitron', sans-serif;
+    font-weight: 900;
+    font-size: 18px;
+    letter-spacing: 6px;
+    color: var(--glow);
+    text-shadow: 0 0 20px var(--glow), 0 0 40px rgba(0,255,224,0.3);
+  }
+
+  .mode-selector {
+    display: flex;
+    gap: 6px;
+  }
+
+  .mode-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--dim);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 9px;
+    padding: 4px 7px;
+    cursor: pointer;
+    border-radius: 3px;
+    letter-spacing: 1px;
+    transition: all 0.2s;
+  }
+
+  .mode-btn.active {
+    border-color: var(--glow);
+    color: var(--glow);
+    background: rgba(0,255,224,0.08);
+    box-shadow: 0 0 10px rgba(0,255,224,0.2);
+  }
+
+  /* Display area */
+  .display-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 16px;
+    gap: 12px;
+    overflow: hidden;
+    min-height: 0;
+  }
+
+  .screen-label {
+    font-size: 9px;
+    letter-spacing: 3px;
+    color: var(--dim);
+    text-transform: uppercase;
+  }
+
+  .cipher-screen {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px;
+    overflow-y: auto;
+    position: relative;
+    min-height: 0;
+    box-shadow: inset 0 0 30px rgba(0,255,224,0.03);
+  }
+
+  .cipher-screen::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 6px;
+    background: radial-gradient(ellipse at top left, rgba(0,255,224,0.04) 0%, transparent 60%);
+    pointer-events: none;
+  }
+
+  #cipher-output {
+    font-size: 15px;
+    line-height: 1.8;
+    color: var(--glow);
+    text-shadow: 0 0 8px rgba(0,255,224,0.5);
+    word-break: break-all;
+    white-space: pre-wrap;
+    min-height: 40px;
+  }
+
+  #cipher-output .cursor {
+    display: inline-block;
+    width: 2px;
+    height: 1em;
+    background: var(--glow);
+    box-shadow: 0 0 8px var(--glow);
+    animation: blink 1s infinite;
+    vertical-align: text-bottom;
+    margin-left: 1px;
+  }
+
+  @keyframes blink {
+    0%, 50% { opacity: 1; }
+    51%, 100% { opacity: 0; }
+  }
+
+  /* Decode panel */
+  .decode-panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-shrink: 0;
+  }
+
+  .decode-label { font-size: 9px; letter-spacing: 2px; color: var(--dim); }
+
+  .decode-text {
+    font-size: 13px;
+    color: rgba(0,255,224,0.4);
+    max-width: 70%;
+    text-align: right;
+    word-break: break-all;
+    transition: all 0.3s;
+  }
+
+  .decode-text.revealed {
+    color: var(--glow2);
+    text-shadow: 0 0 10px rgba(0,136,255,0.5);
+  }
+
+  .reveal-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--dim);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 9px;
+    padding: 5px 10px;
+    cursor: pointer;
+    letter-spacing: 1px;
+    border-radius: 3px;
+    transition: all 0.2s;
+    flex-shrink: 0;
+  }
+
+  .reveal-btn:active {
+    background: rgba(0,255,224,0.1);
+    color: var(--glow);
+    border-color: var(--glow);
+  }
+
+  /* Controls */
+  .controls {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+    padding: 0 16px;
+  }
+
+  .ctrl-btn {
+    flex: 1;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--dim);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    padding: 8px;
+    cursor: pointer;
+    border-radius: 4px;
+    letter-spacing: 1px;
+    transition: all 0.15s;
+    text-transform: uppercase;
+  }
+
+  .ctrl-btn:active { transform: scale(0.95); }
+
+  .ctrl-btn.copy:active { border-color: var(--glow2); color: var(--glow2); }
+  .ctrl-btn.clear:active { border-color: var(--danger); color: var(--danger); }
+  .ctrl-btn.space { flex: 1.5; }
+
+  /* Custom keyboard */
+  .keyboard {
+    background: var(--panel);
+    border-top: 1px solid var(--border);
+    padding: 10px 8px 16px;
+    flex-shrink: 0;
+  }
+
+  .key-row {
+    display: flex;
+    justify-content: center;
+    gap: 5px;
+    margin-bottom: 5px;
+  }
+
+  .key {
+    background: #0d1a24;
+    border: 1px solid #1e3344;
+    border-bottom: 2px solid #0a1218;
+    color: var(--text);
+    font-family: 'Orbitron', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    width: 32px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.08s;
+    position: relative;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  .key:active, .key.pressed {
+    background: rgba(0,255,224,0.12);
+    border-color: var(--glow);
+    color: var(--glow);
+    transform: translateY(1px);
+    box-shadow: 0 0 12px rgba(0,255,224,0.3);
+    border-bottom-width: 1px;
+  }
+
+  .key.wide { width: 48px; font-size: 10px; letter-spacing: 0; }
+  .key.space-key { width: 160px; font-size: 9px; letter-spacing: 2px; }
+
+  .key-hint {
+    position: absolute;
+    bottom: 2px;
+    right: 3px;
+    font-size: 6px;
+    color: var(--dim);
+    font-family: 'Share Tech Mono', monospace;
+    font-weight: 400;
+  }
+
+  /* Status bar */
+  .status-bar {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 16px 6px;
+    flex-shrink: 0;
+  }
+
+  .status-item {
+    font-size: 8px;
+    letter-spacing: 2px;
+    color: var(--dim);
+    text-transform: uppercase;
+  }
+
+  .status-item span { color: var(--glow); }
+
+  /* Glitch animation for new chars */
+  @keyframes glitch-in {
+    0% { opacity: 0; transform: skewX(-10deg); }
+    30% { opacity: 1; transform: skewX(5deg); }
+    60% { transform: skewX(-2deg); }
+    100% { transform: skewX(0deg); }
+  }
+
+  .char-new {
+    display: inline-block;
+    animation: glitch-in 0.15s ease-out forwards;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">CIPHER</div>
+  <div class="mode-selector">
+    <button class="mode-btn active" data-mode="caesar">CAESAR</button>
+    <button class="mode-btn" data-mode="symbols">SYM</button>
+    <button class="mode-btn" data-mode="binary">BIN</button>
+    <button class="mode-btn" data-mode="hex">HEX</button>
+  </div>
+</header>
+
+<div class="display-area">
+  <div class="screen-label">// ENCRYPTED OUTPUT ▸</div>
+  <div class="cipher-screen">
+    <div id="cipher-output"><span class="cursor"></span></div>
+  </div>
+
+  <div class="decode-panel">
+    <div>
+      <div class="decode-label">PLAINTEXT</div>
+      <div class="decode-text" id="plain-text">—</div>
+    </div>
+    <button class="reveal-btn" id="reveal-btn">REVEAL</button>
+  </div>
+</div>
+
+<div class="status-bar">
+  <div class="status-item">CHARS: <span id="char-count">0</span></div>
+  <div class="status-item">MODE: <span id="mode-display">CAESAR</span></div>
+  <div class="status-item">KEY: <span id="key-display">+13</span></div>
+</div>
+
+<div class="controls">
+  <button class="ctrl-btn" id="del-btn">⌫ DEL</button>
+  <button class="ctrl-btn space" id="space-btn">SPACE</button>
+  <button class="ctrl-btn copy" id="copy-btn">COPY</button>
+  <button class="ctrl-btn clear" id="clear-btn">CLR</button>
+</div>
+
+<div class="keyboard">
+  <div class="key-row" id="row1"></div>
+  <div class="key-row" id="row2"></div>
+  <div class="key-row" id="row3"></div>
+</div>
+
+<script>
+  // ─── Encryption modes ───────────────────────────────────────────────────────
+
+  const CAESAR_SHIFT = 13; // ROT13
+
+  const SYMBOL_MAP = {
+    A:'⍜', B:'⌖', C:'⍟', D:'⍡', E:'⊛', F:'⋈', G:'⊠', H:'⌬', I:'⍙',
+    J:'⍱', K:'⋇', L:'⌘', M:'⍫', N:'⌁', O:'⊕', P:'⌥', Q:'⍠', R:'⍎',
+    S:'⊞', T:'⍏', U:'⌃', V:'⋋', W:'⊟', X:'⍚', Y:'⋄', Z:'⍓',
+    ' ':'·', '.':'⊹', ',':'⊷', '!':'⍍', '?':'⍬'
+  };
+
+  function caesarChar(ch) {
+    const c = ch.toUpperCase();
+    if (c >= 'A' && c <= 'Z') {
+      return String.fromCharCode(((c.charCodeAt(0) - 65 + CAESAR_SHIFT) % 26) + 65);
+    }
+    return ch === ' ' ? '∙' : ch;
+  }
+
+  function symbolChar(ch) {
+    return SYMBOL_MAP[ch.toUpperCase()] || ch;
+  }
+
+  function binaryChar(ch) {
+    if (ch === ' ') return '∙';
+    return ch.toUpperCase().charCodeAt(0).toString(2).padStart(8, '0');
+  }
+
+  function hexChar(ch) {
+    if (ch === ' ') return '∙';
+    const code = ch.toUpperCase().charCodeAt(0);
+    return '0x' + code.toString(16).toUpperCase().padStart(2, '0');
+  }
+
+  // ─── State ──────────────────────────────────────────────────────────────────
+
+  let plainText = '';
+  let currentMode = 'caesar';
+  let revealed = false;
+
+  const modeNames = { caesar: 'CAESAR', symbols: 'SYMBOLS', binary: 'BINARY', hex: 'HEX' };
+  const modeKeys  = { caesar: '+13', symbols: 'SYM', binary: 'B8', hex: 'B16' };
+
+  function encrypt(text) {
+    const fns = { caesar: caesarChar, symbols: symbolChar, binary: binaryChar, hex: hexChar };
+    return text.split('').map(fns[currentMode]).join(currentMode === 'binary' || currentMode === 'hex' ? ' ' : '');
+  }
+
+  function renderOutput() {
+    const enc = encrypt(plainText);
+    const out = document.getElementById('cipher-output');
+    out.innerHTML = escHtml(enc) + '<span class="cursor"></span>';
+    document.getElementById('plain-text').textContent = plainText || '—';
+    document.getElementById('char-count').textContent = plainText.length;
+  }
+
+  function escHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function flashChar(ch) {
+    // Animate the last encrypted segment
+    renderOutput();
+  }
+
+  // ─── Mode switching ─────────────────────────────────────────────────────────
+
+  document.querySelectorAll('.mode-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentMode = btn.dataset.mode;
+      document.getElementById('mode-display').textContent = modeNames[currentMode];
+      document.getElementById('key-display').textContent = modeKeys[currentMode];
+      renderOutput();
+    });
+  });
+
+  // ─── Reveal ─────────────────────────────────────────────────────────────────
+
+  const revealBtn = document.getElementById('reveal-btn');
+  const plainEl = document.getElementById('plain-text');
+  let revealTimer;
+
+  revealBtn.addEventListener('click', () => {
+    plainEl.classList.add('revealed');
+    plainEl.textContent = plainText || '—';
+    clearTimeout(revealTimer);
+    revealTimer = setTimeout(() => {
+      plainEl.classList.remove('revealed');
+    }, 3000);
+  });
+
+  // ─── Keyboard ───────────────────────────────────────────────────────────────
+
+  const rows = [
+    ['Q','W','E','R','T','Y','U','I','O','P'],
+    ['A','S','D','F','G','H','J','K','L'],
+    ['Z','X','C','V','B','N','M']
+  ];
+
+  function makeKey(letter) {
+    const k = document.createElement('div');
+    k.className = 'key';
+    k.textContent = letter;
+
+    // Show cipher hint
+    const hint = document.createElement('span');
+    hint.className = 'key-hint';
+    hint.id = 'hint-' + letter;
+    k.appendChild(hint);
+
+    k.addEventListener('touchstart', e => {
+      e.preventDefault();
+      k.classList.add('pressed');
+      typeChar(letter);
+    }, { passive: false });
+
+    k.addEventListener('touchend', e => {
+      e.preventDefault();
+      setTimeout(() => k.classList.remove('pressed'), 100);
+    }, { passive: false });
+
+    // Desktop support
+    k.addEventListener('mousedown', () => { typeChar(letter); });
+
+    return k;
+  }
+
+  rows.forEach((row, i) => {
+    const rowEl = document.getElementById('row' + (i+1));
+    row.forEach(letter => rowEl.appendChild(makeKey(letter)));
+  });
+
+  function typeChar(ch) {
+    plainText += ch;
+    renderOutput();
+    updateHints();
+    // Scroll to bottom
+    const screen = document.querySelector('.cipher-screen');
+    screen.scrollTop = screen.scrollHeight;
+  }
+
+  function updateHints() {
+    const fns = { caesar: caesarChar, symbols: symbolChar, binary: () => '', hex: () => '' };
+    rows.flat().forEach(letter => {
+      const el = document.getElementById('hint-' + letter);
+      if (el) {
+        if (currentMode === 'caesar') el.textContent = caesarChar(letter);
+        else if (currentMode === 'symbols') el.textContent = symbolChar(letter);
+        else el.textContent = '';
+      }
+    });
+  }
+
+  updateHints();
+
+  // ─── Control buttons ────────────────────────────────────────────────────────
+
+  document.getElementById('del-btn').addEventListener('click', () => {
+    plainText = plainText.slice(0, -1);
+    renderOutput();
+  });
+
+  document.getElementById('space-btn').addEventListener('click', () => {
+    typeChar(' ');
+  });
+
+  document.getElementById('clear-btn').addEventListener('click', () => {
+    plainText = '';
+    renderOutput();
+  });
+
+  document.getElementById('copy-btn').addEventListener('click', () => {
+    const enc = encrypt(plainText);
+    navigator.clipboard.writeText(enc).then(() => {
+      const btn = document.getElementById('copy-btn');
+      btn.textContent = 'COPIED!';
+      setTimeout(() => btn.textContent = 'COPY', 1500);
+    }).catch(() => {
+      // Fallback for iOS
+      const ta = document.createElement('textarea');
+      ta.value = encrypt(plainText);
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      const btn = document.getElementById('copy-btn');
+      btn.textContent = 'COPIED!';
+      setTimeout(() => btn.textContent = 'COPY', 1500);
+    });
+  });
+
+  // ─── Hardware keyboard support ───────────────────────────────────────────────
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Backspace') { plainText = plainText.slice(0, -1); renderOutput(); }
+    else if (e.key === ' ') { typeChar(' '); }
+    else if (e.key.length === 1 && /[a-zA-Z]/.test(e.key)) { typeChar(e.key.toUpperCase()); }
+  });
+
+  // ─── Update hints when mode changes ─────────────────────────────────────────
+
+  document.querySelectorAll('.mode-btn').forEach(btn => {
+    btn.addEventListener('click', updateHints);
+  });
+
+  renderOutput();
+</script>
+</body>
+</html>
